@@ -3,7 +3,6 @@ import logging
 import mysql.connector
 
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s"
@@ -17,10 +16,10 @@ def get_connection():
 
     # Read database credentials from environment variables
     connection = mysql.connector.connect(
-        host=os.environ["DB_HOST"],
-        database=os.environ["DB_NAME"],
-        user=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"]
+        host=os.environ["DBHOST"],
+        database=os.environ["DBNAME"],
+        user=os.environ["DBUSER"],
+        password=os.environ["DBPASS"]
     )
 
     return connection
@@ -34,7 +33,6 @@ def get_data_by_group(value):
     connection = get_connection()
     cursor = connection.cursor()
 
-   
     query = """
         SELECT *
         FROM mock
@@ -57,8 +55,7 @@ def plot_counts(groupby):
 
     logging.info("Counting rows grouped by %s", groupby)
 
-    # Only allow columns that actually exist in our mock table.
-    
+    # Only allow columns that exist in the mock table
     allowed_columns = {
         "id",
         "group",
@@ -74,13 +71,47 @@ def plot_counts(groupby):
     connection = get_connection()
     cursor = connection.cursor()
 
-   
-    query = f"""
-        SELECT `{groupby}`, COUNT(*) AS count
-        FROM mock
-        GROUP BY `{groupby}`
-        ORDER BY count DESC
-    """
+    # Choose the query based on the requested column
+    queries = {
+        "id": """
+            SELECT id, COUNT(*) AS count
+            FROM mock
+            GROUP BY id
+            ORDER BY count DESC
+        """,
+        "group": """
+            SELECT `group`, COUNT(*) AS count
+            FROM mock
+            GROUP BY `group`
+            ORDER BY count DESC
+        """,
+        "last_name": """
+            SELECT last_name, COUNT(*) AS count
+            FROM mock
+            GROUP BY last_name
+            ORDER BY count DESC
+        """,
+        "email": """
+            SELECT email, COUNT(*) AS count
+            FROM mock
+            GROUP BY email
+            ORDER BY count DESC
+        """,
+        "gender": """
+            SELECT gender, COUNT(*) AS count
+            FROM mock
+            GROUP BY gender
+            ORDER BY count DESC
+        """,
+        "ip_address": """
+            SELECT ip_address, COUNT(*) AS count
+            FROM mock
+            GROUP BY ip_address
+            ORDER BY count DESC
+        """
+    }
+
+    query = queries[groupby]
 
     cursor.execute(query)
     counts = cursor.fetchall()

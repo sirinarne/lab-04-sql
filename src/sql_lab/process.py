@@ -4,6 +4,7 @@ import pandas as pd
 import mysql.connector
 
 
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(levelname)s: %(message)s"
@@ -23,15 +24,14 @@ def read_data(filename):
 
 
 def clean_data(data):
-    """Remove the rows containing missing values and return cleaned DataFrame."""
+    """Remove rows containing missing values and return a cleaned DataFrame."""
 
     logging.info("Cleaning data")
 
     # Remove any rows that contain missing values
-    cleaned_data = data.dropna()
+    cleaned_data = data.dropna().copy()
 
     # Make sure id is stored as an integer
-    cleaned_data = cleaned_data.copy()
     cleaned_data["id"] = cleaned_data["id"].astype(int)
 
     logging.info("Data successfully cleaned")
@@ -39,62 +39,76 @@ def clean_data(data):
 
 
 def load_data(data, table):
-    """Create the destination table if needed and upload the DataFrame to MySQL."""
+    """Create the mock table if needed and upload the DataFrame to MySQL."""
 
     logging.info("Connecting to MySQL")
 
-    # Read database information from environment variables
-    connection = mysql.connector.connect(
-        host=os.environ["DB_HOST"],
-        database=os.environ["DB_NAME"],
-        user=os.environ["DB_USER"],
-        password=os.environ["DB_PASSWORD"]
-    )
+    connection = None
+    cursor = None
 
-    cursor = connection.cursor()
-
-    create_table_query = f"""
-    CREATE TABLE IF NOT EXISTS {table} (
-        id INT PRIMARY KEY,
-        `group` VARCHAR(50),
-        last_name VARCHAR(100),
-        email VARCHAR(255),
-        gender VARCHAR(20),
-        ip_address VARCHAR(45)
-    )
-    """
-
-    cursor.execute(create_table_query)
-
-    logging.info("Table '%s' is ready", table)
-
-    insert_query = f"""
-    INSERT INTO {table}
-        (id, `group`, last_name, email, gender, ip_address)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    """
-
-    for _, row in data.iterrows():
-        cursor.execute(
-            insert_query,
-            (
-                int(row["id"]),
-                row["group"],
-                row["last_name"],
-                row["email"],
-                row["gender"],
-                row["ip_address"]
-            )
+    try:
+        # Read database information from environment variables
+        connection = mysql.connector.connect(
+            host=os.environ["DBHOST"],
+            database=os.environ["DBNAME"],
+            user=os.environ["DBUSER"],
+            password=os.environ["DBPASS"]
         )
 
-    # Save changes to the database
-    connection.commit()
+        cursor = connection.cursor()
 
-    logging.info("Uploaded %d rows to '%s'", len(data), table)
+        # Create the mock table if it does not already exist
+        create_table_query = """
+        CREATE TABLE IF NOT EXISTS mock (
+            id INT PRIMARY KEY,
+            `group` VARCHAR(50),
+            last_name VARCHAR(100),
+            email VARCHAR(255),
+            gender VARCHAR(20),
+            ip_address VARCHAR(45)
+        )
+        """
 
-    # Close database resources
-    cursor.close()
-    connection.close()
+        cursor.execute(create_table_query)
+
+        logging.info("Table '%s' is ready", table)
+
+        # Parameterized INSERT query
+        insert_query = """
+        INSERT INTO mock
+            (id, `group`, last_name, email, gender, ip_address)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """
+
+        # Upload each row to MySQL
+        for _, row in data.iterrows():
+            cursor.execute(
+                insert_query,
+                (
+                    int(row["id"]),
+                    row["group"],
+                    row["last_name"],
+                    row["email"],
+                    row["gender"],
+                    row["ip_address"]
+                )
+            )
+
+        # Save changes to the database
+        connection.commit()
+
+        logging.info("Uploaded %d rows to '%s'", len(data), table)
+
+    except Exception as error:
+        logging.error("Error uploading data: %s", error)
+
+    finally:
+        # Close database resources
+        if cursor is not None:
+            cursor.close()
+
+        if connection is not None:
+            connection.close()
 
 
 def main():
